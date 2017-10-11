@@ -1,0 +1,2 @@
+# botsh
+Shell IRC bot
