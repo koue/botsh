@@ -1,0 +1,113 @@
+#!/bin/sh
+#
+# botsh - shell irc bot
+# Modified: 2017, Nikola Kolev, koue@chaosophia.net
+# Author: Sean B. Palmer, inamidst.com
+
+usage_fn() {
+  echo "$1"
+  exit 1
+}
+
+# check config file
+[ ! -f /usr/local/etc/botsh.conf ] && usage_fn "Missing /usr/local/etc/botsh.conf file"
+# load config file
+. /usr/local/etc/botsh.conf
+
+[ -z ${NICK} ] && usage_fn "My nickname is not configured"
+[ -z ${SERVER} ] && usage_fn "My IRC server is not configured"
+[ -z ${CHANNEL} ] && usage_fn "My IRC channel is not configured"
+[ -z ${MYINPUT} ] && usage_fn "My input file is not configured"
+
+# check timer bin
+[ ! -x /usr/local/bin/botsh-timer ] && usage_fn "Missing timer file"
+
+##############################################################################
+###
+### Every bot has timer to check if the connection with the irc server is
+### alive. Before start the bot check if old timer exists and if yes kill it.
+###
+##############################################################################
+### If old timer exists kill it
+pkill -f "sh.*botsh-timer"
+
+### Start bot timer
+/usr/local/bin/botsh-timer &
+
+##############################################################################
+###
+### bot functions
+###
+##############################################################################
+
+# print message in the channel
+msg_fn() {
+  echo "PRIVMSG ${CHANNEL} :$1" | tee -a ${MYINPUT}
+}
+
+# makes the bot to quit and start again without reading its config file
+restart_fn() {
+  pkill -f "tail -f ${MYINPUT}"
+}
+
+# IRC server PONG reply
+pong_fn() {
+  REPLY=`echo $1 | sed 's/PING/PONG/'`
+  echo "$REPLY" | tee -a ${MYINPUT}
+}
+
+# print machine uptime in the channel
+uptime_fn() {
+  echo "PRIVMSG ${CHANNEL} :`uptime`" | tee -a ${MYINPUT}
+}
+
+# dispatch commands in the bot
+dispatch_command() {
+  case "$1" in
+    *hello)
+      msg_fn "hello you"
+      ;;
+    *uptime)
+      uptime_fn
+      ;;
+    *restart)
+      restart_fn
+      ;;
+  esac
+}
+
+# dispatch line recevied from the IRC server
+dispatch_line() {
+  case "$1" in
+    PING*)
+      pong_fn "$1"
+      ;;
+    ERROR*)
+      restart_fn
+      ;;
+    *:${NICK}*)
+      dispatch_command "$1"
+      ;;
+  esac
+}
+
+##############################################################################
+###
+### Start connection with irc server
+###
+##############################################################################
+echo "Connecting to ${SERVER}..."
+while true
+do
+  echo "NICK ${NICK}" > ${MYINPUT}
+  echo "USER botsh +iw ${NICK} :$0" >> ${MYINPUT}
+  echo "JOIN ${CHANNEL}" >> ${MYINPUT}
+  tail -f ${MYINPUT} | telnet ${SERVER} 6667 | \
+  while true
+  do read LINE || break
+    echo `date "+%F %H:%M:%S"` "${LINE}"
+    dispatch_line "${LINE}"
+  done
+done
+
+# [EOF]

@@ -1,0 +1,7 @@
+#!/bin/sh
+/usr/local/etc/rc.d/svscan stop
+pkill -f "tail -f ${MYINPUT}"
+pkill -f "sh.*botsh-timer"
+pkill -f "sh.*botsh-rotater"
+sleep 2
+/usr/local/etc/rc.d/svscan start

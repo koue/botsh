@@ -1,0 +1,39 @@
+#!/bin/sh
+#
+##############################################################################
+###
+### The bot has timer to check if the connection with the irc server is alive.
+### If there is no change in the bot input for 150 seconds then restart it.
+###
+##############################################################################
+
+usage_fn(){
+  echo "$1"
+  exit 1
+}
+
+# check config file
+[ ! -f /usr/local/etc/botsh.conf ] && usage_fn "Missing /usr/local/etc/botsh.conf file"
+# load config file
+. /usr/local/etc/botsh.conf
+
+# check mandatory options
+[ -z ${MYINPUT} ] && usage_fn "My input file is not configured"
+[ -z ${MYCHECKLOG} ] && usage_fn "My checklog is not configured"
+
+# get last modified timestamp
+LASTMOD=`stat -f %m ${MYINPUT}`
+
+while true
+do
+  sleep 150
+  CHECK=`stat -f %m ${MYINPUT}`
+  if [ "x${LAST}" == "x${CHECK}" ]
+  then
+      echo "`date '+%F %H:%M:%S'` restart" >> ${MYCHECKLOG}
+      pkill -f "tail -f ${MYINPUT}"
+  else
+      LAST=`stat -f %m ${MYINPUT}`
+      echo "`date '+%F %H:%M:%S'` check ok" >> ${MYCHECKLOG}
+  fi
+done
